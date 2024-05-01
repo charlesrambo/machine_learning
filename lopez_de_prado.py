@@ -7,6 +7,7 @@ Created on Mon Oct 23 13:58:22 2023
 
 import numpy as np
 import pandas as pd
+import time
 #from sklearn.datasets import make_classification
 from sklearn.metrics import log_loss
 from sklearn.model_selection._split import KFold
@@ -18,6 +19,10 @@ from sklearn.utils import check_random_state
 from scipy.linalg import block_diag
 from sklearn.metrics import mutual_info_score
 import scipy.stats as stats
+import multiprocessing as mp
+
+
+# === Content from Machine Learning for Asset Managers ===
 
 # =============================================================================
 # def getTestData(n_features = 100, n_informative = 25, n_redundant = 25, 
@@ -70,7 +75,7 @@ def featImpMDI(clf, feat_names):
     df.columns = feat_names
     
     # Because max_features = 1
-    df = df.repalce(0, np.nan)
+    df = df.replace(0, np.nan)
     
     # Calculate the mean and std of the samples
     imp = pd.concat({'mean':df.mean(), 'std':df.std()/np.sqrt(df.shape[0])}, 
@@ -81,7 +86,7 @@ def featImpMDI(clf, feat_names):
     
     return imp
 
-def featImpMDA(clf, X, y, n_splits = 5):
+def featImpMDA(clf, X, y, n_splits = 10):
     
     # Initialize k-folds constructor
     cv_gen = KFold(n_splits = n_splits)
@@ -134,7 +139,7 @@ def featImpMDA(clf, X, y, n_splits = 5):
     
     return imp
 
-def regFeatImpMDA(reg, X, y, n_splits = 5, p = 2):
+def regFeatImpMDA(reg, X, y, n_splits = 10, p = 2):
     
     # Define penalty function
     pen_fun = lambda e: np.sum(np.abs(e)**p)
@@ -244,7 +249,7 @@ def featImpMDI_Clustered(clf_fit, feat_names, clusters):
     
     return imp
 
-def featImpMDA_Clustered(clf, X, y, clusters, n_splits = 5):
+def featImpMDA_Clustered(clf, X, y, clusters, n_splits = 10):
     
     # Initialize k-folds constructor
     cv_gen = KFold(n_splits = n_splits)
@@ -305,7 +310,7 @@ def featImpMDA_Clustered(clf, X, y, clusters, n_splits = 5):
     return imp
 
 
-def regFeatImpMDA_Clustered(reg, X, y, clusters, n_splits = 5, p = 2):
+def regFeatImpMDA_Clustered(reg, X, y, clusters, n_splits = 10, p = 2):
     
     # Define penalty function
     pen_fun = lambda e: np.sum(np.abs(e)**p)
@@ -464,7 +469,7 @@ def makeNewOutputs(corr0, clusters, clusters2):
 def clusterKMeansTop(corr0, maxNumClusters = None, n_init = 10):
     
     # If the maximum number of clusters is None, then set it equal to the number of columns minus 1
-    if maxNumClusters == None: maxNumClusters = corr0.shape[0] - 1
+    if maxNumClusters is None: maxNumClusters = corr0.shape[0] - 1
     
     # Perform clustering
     corr1, clusters, silh = clusterKMeansBase(corr0, 
@@ -677,22 +682,250 @@ def calc_mut_info_mat(df):
                 mut_info.loc[idx, col], mut_info.loc[col, idx] = I, I
                 
     return mut_info
+ 
+
+
+
+# === Content from Advances in Financila Machine Learning ===
+
+
+ 
+def linear_parts(atoms, threads):
+    
+    # Partition of atoms with a single loop
+    parts = np.linspace(0, atoms, min(atoms, threads) + 1)
+    parts = np.ceil(parts).astype(int)
+    
+    return parts
+
+def nested_parts(atoms, threads, upper_triange = False):
+    
+    # partition of atoms with an inner loop
+    parts, threads_ = [0], min(atoms, threads)
+    
+    for _ in range(threads_):
         
-# =============================================================================
-# X, y = getTestData(40, 5, 30, 10000, scale = 1)
-# 
-# corr0, clusters, silh = clusterKMeansBase(X.corr(), maxNumClusters = 10, n_init = 10)
-# 
-# corr0 = corr0.loc[corr0.columns, :]
-# 
-# clf = DecisionTreeClassifier(criterion = 'entropy', max_features = 1, 
-#                               class_weight = 'balanced')
-#  
-# clf = BaggingClassifier(estimator = clf, n_estimators = 1000, 
-#                         max_features = 1.0, max_samples = 1., 
-#                          oob_score = False)
-# 
-# clf_fit = clf.fit(X, y)
-# 
-# imp = featImpMDI_Clustered(clf_fit, X.columns, clusters)
-# =============================================================================
+        part = 1 + 4 * (parts[-1]**2 + parts[-1] + atoms * (atoms + 1)/threads_)
+        part = (-1 + np.sqrt(part))/2
+        parts.append(part)
+        
+    parts = np.round(parts).astype(int)
+    
+    # If true make the first rows are the heaviest
+    if upper_triange: 
+    
+        parts = np.cumsum(np.diff(parts)[::-1])
+        parts = np.append(np.array([0]), parts)
+        
+    return parts
+
+def expand_call(kargs):
+    
+    # Get the function arguement
+    func = kargs['func']
+    
+    # Delete it from the fictionary
+    del kargs['func']
+    
+    # Evaluate function with other arguments
+    out = func(**kargs)
+    
+    return out
+
+def process_jobs_single_core(jobs):
+    
+    print('We have begun processing!\n')
+    
+    # Run jobs sequentially for debugging
+    out = [expand_call(job) for job in jobs]
+        
+    return out
+
+def report_progress(job_num, num_jobs, start_time):
+    
+    # Report progress as asynch jobs are completed
+    message_stats = [job_num/num_jobs, (time.perf_counter() - start_time)/60]
+    message_stats.append(message_stats[1] * (1/message_stats[0] - 1))
+    
+    time_stamp = time.strftime("%m-%d %H:%M:%S")
+    
+    message = f'{time_stamp}:'
+    message += f'{100 * message_stats[0]: .2f}% complete. '
+    message += f'This job took {message_stats[1]:.2f} minutes. ' 
+    message += f'About {message_stats[2]:.2f} minutes left.' 
+    message += '\n'
+    
+    print(message)
+    
+    if job_num == num_jobs:
+        
+        print('Processing is complete!\n')
+        
+
+def process_jobs(jobs,  num_threads = 6):
+    
+    print('We have begun multiprocessing!\n')
+    
+    # Initialize pool and specify the number of threads
+    pool = mp.Pool(processes = num_threads)
+    
+    # Run imap_unordered; we need index in function to keep track of order
+    outputs = pool.imap_unordered(expand_call, jobs)
+    
+    # Initialize list to contain output
+    out = []
+    
+    # Record time
+    start_time = time.perf_counter()
+    
+    # Process asynchronous output, report progress
+    for job_num, out_ in enumerate(outputs, 1):
+
+        # Append results
+        out.append(out_)
+        
+        # Report progress
+        report_progress(job_num, len(jobs), start_time)
+        
+    pool.close()
+    pool.join()
+    
+    return out
+
+# Wrapper to vectorize; hard to pickle np.vectorize because it runs in C
+# See https://stackoverflow.com/questions/78307097/multiprocessing-pool-imap-unordered-cant-pickle-function/78307726?noredirect=1#comment138058459_78307726
+class vectorize_wrapper:
+    
+    def __init__(self, pyfunc):
+        
+        self.__name__ = 'wrapped_' + pyfunc.__name__ 
+        
+        self.func = np.vectorize(pyfunc)
+
+
+    def __call__(self, index, *args, **kwargs):
+        
+        # Convert index to pandas data frame
+        index_df = pd.DataFrame(index, columns = ['index'])
+            
+        # Convert function output to data frame
+        out_df = pd.DataFrame(self.func(*args, **kwargs))
+           
+        if out_df.shape[0] == index_df.shape[0]:
+            
+            return pd.concat([index_df, out_df], axis = 1)
+        
+        elif out_df.shape[1] == index_df.shape[0]:
+
+            return pd.concat([index_df, out_df.T], axis = 1)
+        
+        else:
+            
+            raise ValueError("The dimensions are inconsistent!")
+            
+    def __setstate__(self, state):
+        
+        self.func = np.vectorize(state)
+
+    def __getstate__(self):
+        
+        return self.func.pyfunc
+  
+
+
+def run_queued_multiprocessing(func, index, params_dict = {}, 
+                               num_threads = 24, mp_batches = 1, 
+                               linear_molecules = False, prep_func = True, 
+                               **kwargs):
+    """
+    Parallelize jobs, returns a data frame or series.
+
+    Parameters
+    ----------
+    func : function
+        Function to be parallelized. Output must be a pandas data frame if 
+        prep_func =  False.
+    index : list, numpy array, pandas index, or pandas series. Used to keep 
+        track of returned observations. If prep_func = False, then only used for
+        number of observations
+    params_dict: dictionary, optional
+        Contains a dictionary of the variables to input into func. The keys are
+        the argument names and the values are pandas series of the corresponding
+        values. Default is {}
+    num_threads : int, optional
+        The number of threads that will be used in parallel (one processor per thread). 
+        The default is 24.
+    mp_batches : TYPE, optional
+        Number of parallel batches (jobs per core). The default is 1.
+    linear_molecules : boolean, optional
+        Whether partitions will be linear or double-nested. The default is False.
+    prep_func: boolean, optional
+        Whether to vectorize function and make the first input the index. 
+        Functions vectorized using np.vectorize are not pickleable so care must
+        be taken to prep the functions if done manually. Furthermore, 
+        mp.imap_unordered does not preserve order. As a result, the function 
+        must be constructed so that inputs and outputs match.
+    kwargs:
+        Additional arguments of function that do not need to be vectorized.
+
+    Returns
+    -------
+    Pandas data frame of sorted outputs
+
+    """
+        
+    if prep_func:
+        
+        # Modify function
+        new_func = vectorize_wrapper(func)
+    
+        # Add index to the parameters
+        params_dict['index'] = index
+    
+    # Get observations
+    num_obs = len(index)
+    
+    # Define how we're doing to break up the taks
+    if linear_molecules: 
+        
+        parts = linear_parts(num_obs, num_threads * mp_batches)
+        
+    else:
+        
+        parts = nested_parts(num_obs, num_threads * mp_batches)
+    
+    # Initialize list to hold jobs
+    jobs = []
+    
+    # Creaete jobs
+    for i in range(1, len(parts)):
+        
+        job = {key:params_dict[key][parts[i - 1]:parts[i]] for key in params_dict}
+        job.update({'func':new_func, **kwargs})
+        jobs.append(job)
+        
+    # If number of threads is one...   
+    if num_threads == 1: 
+        
+        # ... run simply using list comprehension
+        out = process_jobs_single_core(jobs)
+    
+    # Otherwise...
+    else:
+        
+        # ... use multiprocessing module
+        out = process_jobs(jobs, num_threads = num_threads)
+        
+    
+    # Concatinate results in list
+    result_df = pd.concat(out, axis = 0)
+    
+    if prep_func:
+        
+        # Set index as the index and drop as column
+        result_df = result_df.set_index('index', drop = True)
+
+    # Sort by the index
+    result_df = result_df.sort_index()   
+    
+    return result_df      
