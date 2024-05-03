@@ -690,6 +690,7 @@ def calc_mut_info_mat(df):
 
 
  
+ 
 def linear_parts(atoms, threads):
     
     # Partition of atoms with a single loop
@@ -762,9 +763,11 @@ def report_progress(job_num, num_jobs, start_time):
         print('Processing is complete!\n')
         
 
-def process_jobs(jobs,  num_threads = 6):
+def process_jobs(jobs,  num_threads = 6, verbose = True):
     
-    print('We have begun multiprocessing!\n')
+    if verbose:
+        
+        print('We have begun multiprocessing!\n')
     
     # Initialize pool and specify the number of threads
     pool = mp.Pool(processes = num_threads)
@@ -784,8 +787,11 @@ def process_jobs(jobs,  num_threads = 6):
         # Append results
         out.append(out_)
         
-        # Report progress
-        report_progress(job_num, len(jobs), start_time)
+        # If verbose is true...
+        if verbose:
+            
+            # ... report progress
+            report_progress(job_num, len(jobs), start_time)
         
     pool.close()
     pool.join()
@@ -830,13 +836,13 @@ class vectorize_wrapper:
     def __getstate__(self):
         
         return self.func.pyfunc
+    
   
-
 
 def run_queued_multiprocessing(func, index, params_dict = {}, 
                                num_threads = 24, mp_batches = 1, 
                                linear_molecules = False, prep_func = True, 
-                               **kwargs):
+                               verbose = True, **kwargs):
     """
     Parallelize jobs, returns a data frame or series.
 
@@ -859,12 +865,14 @@ def run_queued_multiprocessing(func, index, params_dict = {},
         Number of parallel batches (jobs per core). The default is 1.
     linear_molecules : boolean, optional
         Whether partitions will be linear or double-nested. The default is False.
-    prep_func: boolean, optional
+    prep_func : boolean, optional
         Whether to vectorize function and make the first input the index. 
         Functions vectorized using np.vectorize are not pickleable so care must
         be taken to prep the functions if done manually. Furthermore, 
         mp.imap_unordered does not preserve order. As a result, the function 
         must be constructed so that inputs and outputs match.
+    verbose : boolean, optional
+        Whether to print messages as the multiprocessing loops through jobs.
     kwargs:
         Additional arguments of function that do not need to be vectorized.
 
@@ -922,7 +930,7 @@ def run_queued_multiprocessing(func, index, params_dict = {},
     else:
         
         # ... use multiprocessing module
-        out = process_jobs(jobs, num_threads = num_threads)
+        out = process_jobs(jobs, num_threads = num_threads, verbose = verbose)
         
     
     # Concatinate results in list
