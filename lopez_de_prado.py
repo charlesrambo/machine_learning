@@ -752,7 +752,7 @@ def report_progress(job_num, num_jobs, start_time):
     
     message = f'{time_stamp}:'
     message += f'{100 * message_stats[0]: .2f}% complete. '
-    message += f'This job took {message_stats[1]:.2f} minutes. ' 
+    message += f'It has been {message_stats[1]:.2f} minutes. ' 
     message += f'About {message_stats[2]:.2f} minutes left.' 
     message += '\n'
     
