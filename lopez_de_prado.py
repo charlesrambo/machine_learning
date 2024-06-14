@@ -686,11 +686,9 @@ def calc_mut_info_mat(df):
 
 
 
-# === Content from Advances in Financila Machine Learning ===
+# === Content from Advances in Financial Machine Learning ===
 
 
- 
- 
 def linear_parts(atoms, threads):
     
     # Partition of atoms with a single loop
@@ -840,7 +838,7 @@ class vectorize_wrapper:
   
 
 def run_queued_multiprocessing(func, index, params_dict = {}, 
-                               num_threads = 24, mp_batches = 1, 
+                               num_threads = 6, mp_batches = 1, 
                                linear_molecules = False, prep_func = True, 
                                verbose = True, **kwargs):
     """
@@ -860,7 +858,7 @@ def run_queued_multiprocessing(func, index, params_dict = {},
         values. Default is {}
     num_threads : int, optional
         The number of threads that will be used in parallel (one processor per thread). 
-        The default is 24.
+        The default is 6.
     mp_batches : TYPE, optional
         Number of parallel batches (jobs per core). The default is 1.
     linear_molecules : boolean, optional
