@@ -92,12 +92,16 @@ def featImpMDI(clf, feat_names):
     
     return imp
 
-def featImpMDA(clf, X, y, n_splits = 10, cv_gen = None):
+def featImpMDA(clf, X, y, n_splits = None, cv = None):
     
-    if cv_gen is None:
+    if cv is None:
         
         # Initialize k-folds constructor
         cv_gen = KFold(n_splits = n_splits).split(X = X)
+        
+    else:
+        
+        cv_gen = cv.split(X = X)
     
     # Initialize pandas objects to hold raw and shuffled log_loss scores
     score_raw, score_shuff = pd.Series(), pd.DataFrame(columns = X.columns)
@@ -148,15 +152,19 @@ def featImpMDA(clf, X, y, n_splits = 10, cv_gen = None):
     return imp
 
 
-def regFeatImpMDA(reg, X, y, n_splits = 10, p = 2, cv_gen = None):
+def regFeatImpMDA(reg, X, y, n_splits = None, p = 2, cv = None):
     
     # Define penalty function
     pen_fun = lambda e: np.sum(np.abs(e)**p)
     
-    if cv_gen is None:
+    if cv is None:
         
         # Initialize k-folds constructor
         cv_gen = KFold(n_splits = n_splits).split(X = X)
+        
+    else:
+        
+        cv_gen = cv.split(X = X)
         
     # Initialize pandas objects to hold raw and shuffled log_loss scores
     score_raw, score_shuff = pd.Series(), pd.DataFrame(columns = X.columns)
@@ -260,16 +268,22 @@ def featImpMDI_Clustered(clf_fit, feat_names, clusters):
     
     return imp
 
-def featImpMDA_Clustered(clf, X, y, clusters, n_splits = 10):
+def featImpMDA_Clustered(clf, X, y, clusters, n_splits = None, cv = None):
     
-    # Initialize k-folds constructor
-    cv_gen = KFold(n_splits = n_splits)
+    if cv is None:
+        
+        # Initialize k-folds constructor
+        cv_gen = KFold(n_splits = n_splits).split(X = X)
+        
+    else:
+        
+        cv_gen = cv.split(X = X)
     
     # Initialize pandas objects to hold raw and shuffled log_loss scores
     score_raw, score_shuff = pd.Series(), pd.DataFrame(columns = clusters.keys())
     
     # Generate splits
-    for fold, (train_idx, test_idx) in enumerate(cv_gen.split(X = X)):
+    for fold, (train_idx, test_idx) in enumerate(cv_gen):
         
         # Create training arrays
         X_train, y_train = X.iloc[train_idx, :], y.iloc[train_idx]
@@ -391,6 +405,9 @@ def clusterKMeansBase(corr0, maxNumClusters = 10, n_init = 10):
     
     # Initialize pandas series to hold silhouette scores
     silh = pd.Series()
+    
+    # maxNumClusters can't be more than samples minus 1
+    maxNumClusters = int(np.min([maxNumClusters, corr0.shape[0] - 1]))
     
     # Loop over possible number of clusters
     for i in range(2, maxNumClusters + 1):
@@ -1188,18 +1205,23 @@ def clf_hyperparameter_fit(X, y, holding_dates, pipe_clf, param_grid, scoring,
                                 param_distributions = param_grid,
                                 scoring = scoring, cv = inner_cv, 
                                 n_jobs = n_jobs, n_iter = n_random_iter)
+        
+        
+    gs = gs.fit(X, y, **fit_params)
      
     # Fit grid search and record the best estimator
-    gs = gs.fit(X, y, **fit_params).best_estimator_ 
+    best_estimator = gs.best_estimator_ 
+    best_params = gs.best_params_
         
     # fit validated model on the entirety of the data
     if bagging_dict is not None:
         
-        gs = BaggingClassifier(estimator = MyPipeline(gs.steps), n_jobs = n_jobs, 
-                               **bagging_dict)
+        best_estimator = BaggingClassifier(estimator = MyPipeline(best_estimator.steps), 
+                                           n_jobs = n_jobs, **bagging_dict)
         
-        gs = gs.fit(X, y, sample_weight = fit_params[gs.base_estimator.steps[-1][0] + '__stample_weight'])
+        best_estimator = gs.fit(X, y, 
+                                sample_weight = fit_params[best_estimator.base_estimator.steps[-1][0] + '__stample_weight'])
         
-        gs = Pipeline([('bag', 'gs')])
+        best_estimator = Pipeline([('bag', 'gs')])
         
-    return gs
+    return best_estimator, best_params
