@@ -1212,6 +1212,7 @@ def clf_hyperparameter_fit(X, y, holding_dates, pipe_clf, param_grid, scoring,
     # Fit grid search and record the best estimator
     best_estimator = gs.best_estimator_ 
     best_params = gs.best_params_
+    score = gs.best_score_
         
     # fit validated model on the entirety of the data
     if bagging_dict is not None:
@@ -1224,4 +1225,4 @@ def clf_hyperparameter_fit(X, y, holding_dates, pipe_clf, param_grid, scoring,
         
         best_estimator = Pipeline([('bag', 'gs')])
         
-    return best_estimator, best_params
+    return best_estimator, best_params, score
