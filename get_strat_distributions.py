@@ -15,18 +15,18 @@ plt.style.use("seaborn-v0_8")
 
 # Define function
 def get_strat_distributions(df, model, wt_fun, signals, target, rtn, date, cv,
-                            freq = 1, sample_weight = None, filename = None, 
-                            bins = None, **kwargs):
+                            freq = 1, sample_weight = None, title = None, 
+                            filename = None, bins = None, **kwargs):
     
     # Get the number of splits
-    n_splits = cv.get_n_splits(X = df.values)
+    n_splits = cv.get_n_splits(X = df)
     
     # Initialize dictionary to hold simulated results
-    sim_dict = {'Sharpe':np.zeros(n_splits), 'VaR':np.zeros(n_splits), 
+    sim_dict = {'Sharpe':np.zeros(n_splits), 'STD':np.zeros(n_splits), 
                     'IR':np.zeros(n_splits), 'Spearman':np.zeros(n_splits)}
     
     # Iterate over splits
-    for fold, (train_idx, test_idx) in enumerate(cv.split(df.values)):
+    for fold, (train_idx, test_idx) in enumerate(cv.split(df)):
         
         # Make a deepcopy of df
         df_copy = df.copy()
@@ -34,7 +34,7 @@ def get_strat_distributions(df, model, wt_fun, signals, target, rtn, date, cv,
         # Fit model on training data
         model = model.fit(df_copy.loc[train_idx, signals].values, 
                           df_copy.loc[train_idx, target].values, 
-                          sample_weight = sample_weight)
+                          sample_weight = sample_weight.loc[train_idx] if sample_weight is not None else None)
         
         # Subset to test data
         df_copy = df_copy.loc[test_idx, :]
@@ -57,7 +57,7 @@ def get_strat_distributions(df, model, wt_fun, signals, target, rtn, date, cv,
         # Calculate stats    
         sim_dict ['IR'][fold] = np.sqrt(freq) * np.mean(rtn_arr - mkt_arr)/np.std(rtn_arr - mkt_arr)
         sim_dict['Sharpe'][fold] = np.sqrt(freq) * np.mean(rtn_arr)/np.std(rtn_arr)
-        sim_dict['VaR'][fold] = -np.sqrt(freq) * np.quantile(rtn_arr, 0.05)
+        sim_dict['STD'][fold] = np.sqrt(freq) * np.std(rtn_arr)
         sim_dict['Spearman'][fold] = spearmanr(rtn_arr, mkt_arr)[0]
         
     # Initialize data frame to hold results   
@@ -95,13 +95,17 @@ def get_strat_distributions(df, model, wt_fun, signals, target, rtn, date, cv,
         # Plot vertical line at mean
         ax[row, col].axvline(sim_dict[key].mean(), color = 'k', 
                              linestyle = 'dashed', linewidth = 1,
-                             label = 'Mean')
+                             label = f'Mean: {sim_dict[key].mean():.2f}')
         
         # Give plot a title
         ax[row, col].set_title(key)
         
         # Add legend
         ax[row, col].legend()
+        
+    if title is not None:
+        
+        fig.suptitle(title)
     
     # Save figure if filename is not None   
     if filename is not None:
@@ -112,6 +116,7 @@ def get_strat_distributions(df, model, wt_fun, signals, target, rtn, date, cv,
     plt.show()
     
     return results
+
 
 
 if __name__ == '__main__':
