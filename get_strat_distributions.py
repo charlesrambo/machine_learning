@@ -62,17 +62,27 @@ def get_strat_distributions(df, model, wt_fun, signals, target, rtn, date, cv,
         
     # Initialize data frame to hold results   
     results = pd.DataFrame(index = list(sim_dict.keys()), 
-                           columns = ['mean', 'std_error', 't-stat'])
+                           columns = ['median', 'Q1', 'Q3', 'mean', 'std_error', 
+                                      't-stat'])
     
     # Loop over key
     for key in sim_dict:
+        
+        # Calculate median
+        results.loc[key, 'median'] = np.median(sim_dict[key]) 
+
+        # Calculate Q1
+        results.loc[key, 'Q1'] = np.quantile(sim_dict[key], 0.25) 
+
+        # Calculate Q3
+        results.loc[key, 'Q3'] = np.quantile(sim_dict[key], 0.75) 
         
         # Calculate mean
         results.loc[key, 'mean'] = np.mean(sim_dict[key])
         
         # Calculate standard error
         results.loc[key, 'std_error'] = np.std(sim_dict[key])/np.sqrt(len(sim_dict[key]))
-        
+            
     # Calculate the t-statistic
     results['t-stat'] = results['mean']/results['std_error'] 
         
@@ -92,10 +102,20 @@ def get_strat_distributions(df, model, wt_fun, signals, target, rtn, date, cv,
         # Plot histogram
         ax[row, col].hist(sim_dict[key], bins = bins, density = True)
         
-        # Plot vertical line at mean
-        ax[row, col].axvline(sim_dict[key].mean(), color = 'k', 
+        # Plot vertical line at Q1
+        ax[row, col].axvline(sim_dict[key].quantile(0.25), color = 'blue', 
                              linestyle = 'dashed', linewidth = 1,
-                             label = f'Mean: {sim_dict[key].mean():.2f}')
+                             label = f'Q1: {sim_dict[key].quantile(0.25):.2f}')
+        
+        # Plot vertical line at median
+        ax[row, col].axvline(sim_dict[key].median(), color = 'black', 
+                             linestyle = 'dashed', linewidth = 1,
+                             label = f'Median: {sim_dict[key].median():.2f}')
+ 
+        # Plot vertical line at Q3
+        ax[row, col].axvline(sim_dict[key].quantile(0.75), color = 'blue', 
+                             linestyle = 'dashed', linewidth = 1,
+                             label = f'Q3: {sim_dict[key].quantile(0.75):.2f}')
         
         # Give plot a title
         ax[row, col].set_title(key)
