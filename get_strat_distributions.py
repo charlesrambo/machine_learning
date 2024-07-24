@@ -103,19 +103,19 @@ def get_strat_distributions(df, model, wt_fun, signals, target, rtn, date, cv,
         ax[row, col].hist(sim_dict[key], bins = bins, density = True)
         
         # Plot vertical line at Q1
-        ax[row, col].axvline(np.quantile(sim_dict[key], 0.25), color = 'blue', 
+        ax[row, col].axvline(np.nanquantile(sim_dict[key], 0.25), color = 'blue', 
                              linestyle = 'dashed', linewidth = 1,
-                             label = f'Q1: {np.quantile(sim_dict[key], 0.25) :.2f}')
+                             label = f'Q1: {np.nanquantile(sim_dict[key], 0.25) :.2f}')
         
         # Plot vertical line at median
-        ax[row, col].axvline(np.median(sim_dict[key]), color = 'black', 
+        ax[row, col].axvline(np.nanmedian(sim_dict[key]), color = 'black', 
                              linestyle = 'dashed', linewidth = 1,
-                             label = f'Median: {np.median(sim_dict[key]):.2f}')
+                             label = f'Median: {np.nanmedian(sim_dict[key]):.2f}')
  
         # Plot vertical line at Q3
-        ax[row, col].axvline(np.quantile(sim_dict[key], 0.75), color = 'blue', 
+        ax[row, col].axvline(np.nanquantile(sim_dict[key], 0.75), color = 'blue', 
                              linestyle = 'dashed', linewidth = 1,
-                             label = f'Q3: {np.quantile(sim_dict[key], 0.75):.2f}')
+                             label = f'Q3: {np.nanquantile(sim_dict[key], 0.75):.2f}')
         
         # Give plot a title
         ax[row, col].set_title(key)
