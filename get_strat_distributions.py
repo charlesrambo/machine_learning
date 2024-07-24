@@ -69,19 +69,19 @@ def get_strat_distributions(df, model, wt_fun, signals, target, rtn, date, cv,
     for key in sim_dict:
             
         # Calculate median
-        results.loc[key, 'median'] = np.median(sim_dict[key]) 
+        results.loc[key, 'median'] = np.nanmedian(sim_dict[key]) 
 
         # Calculate Q1
-        results.loc[key, 'Q1'] = np.quantile(sim_dict[key], 0.25) 
+        results.loc[key, 'Q1'] = np.nanquantile(sim_dict[key], 0.25) 
 
         # Calculate Q3
-        results.loc[key, 'Q3'] = np.quantile(sim_dict[key], 0.75) 
+        results.loc[key, 'Q3'] = np.nanquantile(sim_dict[key], 0.75) 
             
         # Calculate mean
-        results.loc[key, 'mean'] = np.mean(sim_dict[key])
+        results.loc[key, 'mean'] = np.nanmean(sim_dict[key])
             
         # Calculate standard error
-        results.loc[key, 'std_error'] = np.std(sim_dict[key])/np.sqrt(len(sim_dict[key]))
+        results.loc[key, 'std_error'] = np.nanstd(sim_dict[key])/np.sqrt(len(sim_dict[key]))
                 
     # Calculate the t-statistic
     results['t-stat'] = results['mean']/results['std_error'] 
