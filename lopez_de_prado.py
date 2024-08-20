@@ -149,6 +149,9 @@ def featImpMDA(clf, X, y, n_splits = None, cv = None):
     imp = pd.concat({'mean':imp.mean(), 
                      'std':imp.std()/np.sqrt(imp.shape[0])}, axis = 1)
     
+    # Calculate t-stat
+    imp.loc[imp['std'] != 0, 't-stat'] = imp.loc[imp['std'] != 0, 'mean']/imp.loc[imp['std'] != 0, 'std']
+    
     return imp
 
 
@@ -211,6 +214,9 @@ def regFeatImpMDA(reg, X, y, n_splits = None, p = 2, cv = None):
     imp = pd.concat({'mean':imp.mean(), 
                      'std':imp.std()/np.sqrt(imp.shape[0])}, axis = 1)
     
+    # Calculate t-stat
+    imp.loc[imp['std'] != 0, 't-stat'] = imp.loc[imp['std'] != 0, 'mean']/imp.loc[imp['std'] != 0, 'std']
+    
     return imp
         
 
@@ -244,7 +250,13 @@ def groupMeanStd(df, clusters):
         # Compute the standard deviation 
         out.loc[f'C_{clst}', 'std'] = temp.std()/np.sqrt(temp.shape[0])
         
+        # Calculate t-stat
+        if out.loc[f'C_{clst}', 'std'] != 0:
+            
+            out.loc[f'C_{clst}', 't-stat'] = out.loc[f'C_{clst}', 'mean']/out.loc[f'C_{clst}', 'std']
+            
     return out
+
 
 def featImpMDI_Clustered(clf_fit, feat_names, clusters):
     
@@ -267,6 +279,7 @@ def featImpMDI_Clustered(clf_fit, feat_names, clusters):
     imp /= imp['mean'].sum()
     
     return imp
+
 
 def featImpMDA_Clustered(clf, X, y, clusters, n_splits = None, cv = None):
     
@@ -328,6 +341,9 @@ def featImpMDA_Clustered(clf, X, y, clusters, n_splits = None, cv = None):
     # Calculate the mean and std
     imp = pd.concat({'mean':imp.mean(), 
                      'std':imp.std()/np.sqrt(imp.shape[0])}, axis = 1)
+    
+    # Calculate t-stat
+    imp.loc[imp['std'] != 0, 't-stat'] = imp.loc[imp['std'] != 0, 'mean']/imp.loc[imp['std'] != 0, 'std']
     
     # Change the index name
     imp.index = [f'C_{i}' for i in imp.index]
@@ -391,6 +407,9 @@ def regFeatImpMDA_Clustered(reg, X, y, clusters, n_splits = 10, p = 2):
     # Calculate the mean and std
     imp = pd.concat({'mean':imp.mean(), 
                      'std':imp.std()/np.sqrt(imp.shape[0])}, axis = 1)
+    
+    # Calculate t-stat
+    imp.loc[imp['std'] != 0, 't-stat'] = imp.loc[imp['std'] != 0, 'mean']/imp.loc[imp['std'] != 0, 'std']
     
     # Change the index name
     imp.index = [f'C_{i}' for i in imp.index]
@@ -738,7 +757,7 @@ def nested_parts(atoms, threads, upper_triange = False):
         
     parts = np.round(parts).astype(int)
     
-    # If true make the first rows are the heaviest
+    # If true make the first rows the heaviest
     if upper_triange: 
     
         parts = np.cumsum(np.diff(parts)[::-1])
@@ -761,7 +780,7 @@ def expand_call(kargs):
 
 def process_jobs_single_core(jobs):
     
-    print('We have begun processing!\n')
+    print('\n We have begun processing!\n')
     
     # Run jobs sequentially for debugging
     out = [expand_call(job) for job in jobs]
@@ -1140,6 +1159,9 @@ class CombPurgedKFoldCV(_BaseKFold):
         # Loop over splits of index
         for test_splits in combinations(splits, r = self.n_test_splits):
             
+            # Remove empty test splits
+            test_splits = [a for a in test_splits if len(a) > 0]
+            
             # Get train date lists; add back warm up dates which may be empty
             train_splits = [warm_up_dates] + [a for a in splits if a not in test_splits]
             
@@ -1188,14 +1210,15 @@ class MyPipeline(Pipeline):
                 
 def clf_hyperparameter_fit(X, y, holding_dates, pipe_clf, param_grid, scoring, 
                            inner_cv, bagging_dict = None, n_random_iter = 0, 
-                           n_jobs = -1, **fit_params):
+                           n_jobs = -1, error_score = np.nan, **fit_params):
      
     # If n_random_iter is 0...
     if n_random_iter == 0:
         
         # ... just perform regular grid search
         gs = GridSearchCV(estimator = pipe_clf, param_grid = param_grid,
-                          scoring = scoring, cv = inner_cv, n_jobs = n_jobs)
+                          scoring = scoring, cv = inner_cv, n_jobs = n_jobs,
+                          error_score = error_score)
     
     # Otherwise...
     else:
@@ -1204,7 +1227,8 @@ def clf_hyperparameter_fit(X, y, holding_dates, pipe_clf, param_grid, scoring,
         gs = RandomizedSearchCV(estimator = pipe_clf, 
                                 param_distributions = param_grid,
                                 scoring = scoring, cv = inner_cv, 
-                                n_jobs = n_jobs, n_iter = n_random_iter)
+                                n_jobs = n_jobs, n_iter = n_random_iter,
+                                error_score = error_score)
         
         
     gs = gs.fit(X, y, **fit_params)
