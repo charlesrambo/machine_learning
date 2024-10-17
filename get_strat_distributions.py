@@ -7,8 +7,11 @@ Created on Wed Jul  3 07:17:35 2024
 
 import numpy as np
 import pandas as pd
+import copy
 import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
+from sklearn.pipeline import Pipeline
+from sklearn.calibration import CalibratedClassifierCV
 
 # Use Seaborn style
 plt.style.use("seaborn-v0_8")
@@ -16,7 +19,8 @@ plt.style.use("seaborn-v0_8")
 # Define function
 def get_strat_distributions(df, model, wt_fun, signals, target, rtn, date, cv,
                             freq = 1, sample_weight = None, title = None, 
-                            filename = None, bins = None, **kwargs):
+                            filename = None, bins = None, calibrate = False, 
+                            cali_cv = 3, cali_method = 'isotonic', **kwargs):
     
     # Get the number of splits
     n_splits = cv.get_n_splits(X = df)
@@ -31,8 +35,27 @@ def get_strat_distributions(df, model, wt_fun, signals, target, rtn, date, cv,
         # Make a deepcopy of df
         df_copy = df.copy()
         
+        if calibrate:
+            
+            model_new = CalibratedClassifierCV(model, method = cali_method, 
+                                               cv = cali_cv)
+            
+        else:
+            
+            model_new = copy.deepcopy(model)
+        
         # Fit model on training data
-        model = model.fit(df_copy.loc[train_idx, signals].values, 
+        if isinstance(model, Pipeline) & (sample_weight is not None):
+            
+            model_new.fit(df_copy.loc[train_idx, signals].values, 
+                          df_copy.loc[train_idx, target].values, 
+                          **{model.steps[-1][0] + '__sample_weight':sample_weight.loc[train_idx]})
+            
+        else:
+            
+            
+            # Fit model on training data
+            model_new.fit(df_copy.loc[train_idx, signals].values, 
                           df_copy.loc[train_idx, target].values, 
                           sample_weight = sample_weight.loc[train_idx] if sample_weight is not None else None)
         
@@ -43,7 +66,7 @@ def get_strat_distributions(df, model, wt_fun, signals, target, rtn, date, cv,
         mkt_arr = df_copy.groupby(date)[rtn].mean().values    
         
         # Get probability of 1
-        df_copy['prob'] = model.predict_proba(df_copy.loc[test_idx, signals].values)[:, 1]
+        df_copy['prob'] = model_new.predict_proba(df_copy.loc[test_idx, signals].values)[:, 1]
         
         # Calculate weight
         df_copy['wt'] = df_copy.groupby('Date')['prob'].transform(lambda x: wt_fun(x))
@@ -140,7 +163,8 @@ def get_strat_distributions(df, model, wt_fun, signals, target, rtn, date, cv,
 
 if __name__ == '__main__':
     
-    from sklearn.linear_model import LogisticRegression
+    #from sklearn.linear_model import LogisticRegression
+    from sklearn.ensemble import ExtraTreesClassifier
     from sklearn.model_selection._split import KFold
 
     from scipy.stats import norm, multivariate_normal
@@ -192,8 +216,7 @@ if __name__ == '__main__':
         probs = np.asarray(probs).flatten()
         
         # Truncate probabilities
-        probs[probs > 0.99] = 0.99
-        probs[probs < 0.01] = 0.01
+        probs = np.clip(probs, 0.01, 0.99)
         
         # Covert from probabilities to weights
         wt = norm.ppf(probs)
@@ -219,11 +242,13 @@ if __name__ == '__main__':
     cv = KFold(n_splits = 100)
 
     # Define model
-    model = LogisticRegression()
+    #model = LogisticRegression()
+    model = ExtraTreesClassifier(n_estimators = 10)
     
     # Get results
     results = get_strat_distributions(data, model, wt_fun, signals, 'target',  
-                                      'rtn', 'Date', cv, dpi = 300, 
+                                      'rtn', 'Date', cv, calibrate = True, 
+                                      cali_method = 'sigmoid', dpi = 300, 
                                       figsize = (20, 15), freq = 12, 
                                       sample_weight = None, filename = None)
     
